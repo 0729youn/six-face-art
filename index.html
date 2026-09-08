@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>6면체 작품 제작</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101114;color:#fff;font-family:system-ui,-apple-system,sans-serif}
+main{max-width:760px;margin:24px auto;padding:22px;background:#191b20;border:1px solid #363942;border-radius:18px}
+h1{margin:0 0 7px}.desc{font-size:13px;color:#adb3bd;line-height:1.65}
+.face{margin:14px 0;padding:14px;border:1px solid #363941;border-radius:12px}
+h3{margin:0 0 10px;font-size:14px}label{display:block;font-size:11px;color:#bfc4cc;margin:8px 0 4px}
+input[type=file]{width:100%;padding:7px;background:#101114;color:#fff;border:1px solid #454952;border-radius:7px}
+input[type=range]{width:100%}
+button{width:100%;padding:12px;margin-top:10px;border:0;border-radius:10px;font-weight:800;cursor:pointer}
+#preview{background:#fff;color:#111}#save{background:#fff;color:#111}
+.photoHelp{margin-top:14px;padding:11px 12px;border:1px solid #363941;border-radius:10px;background:#14161a;color:#cbd0d8;font-size:12px;line-height:1.5}
+#progressWrap{display:none;margin-top:12px}.bar{height:13px;background:#30333b;border-radius:999px;overflow:hidden}.fill{height:100%;width:0;background:#fff;transition:width .15s}.pct{text-align:center;margin-top:7px;font-size:12px}
+#msg{margin-top:12px;font-size:12px;color:#c6cad2;line-height:1.6}a{color:#fff}
+#previewBox{display:none;position:fixed;inset:0;z-index:20;background:#101114}
+#previewFrame{width:100%;height:100%;border:0}
+.close{position:absolute;right:18px;top:18px;width:auto;padding:10px 14px;background:#fff;color:#111;z-index:22}
+.dim{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+@media(max-width:600px){main{margin:0;border-radius:0}.dim{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>가로형 6면체 작품 제작</h1>
+<div class="desc">
+순서: <b>① 윗면 → ② 앞면 → ③ 오른쪽 → ④ 뒷면 → ⑤ 왼쪽 → ⑥ 아랫면</b><br>
+고해상도 원본은 공유 링크에 넣지 않고 온라인 저장소에 직접 업로드합니다.
+</div>
+<div class="dim">
+<label>가로<input id="W" type="number" value="6" min="2" step=".1"></label>
+<label>높이<input id="H" type="number" value="3.6" min="2" step=".1"></label>
+<label>깊이<input id="D" type="number" value="2.6" min="1" step=".1"></label>
+</div>
+<div class="photoHelp">각 면마다 <b>배경 + 인물 + 앞 프레임</b>을 넣습니다. 총 <b>18장</b>까지 업로드할 수 있습니다.</div><div id="faces"></div>
+<button id="preview">👁 관람객 시점 미리보기</button>
+<button id="save">⚡ 인터넷에 저장하고 짧은 공유 링크 만들기</button>
+<div id="progressWrap"><div class="bar"><div class="fill" id="fill"></div></div><div class="pct" id="pct">0%</div></div>
+<div id="msg"></div>
+</main>
+
+<div id="previewBox">
+<iframe id="previewFrame"></iframe>
+<button class="close" onclick="closePreview()">편집으로 돌아가기</button>
+</div>
+
+<script>
+let upload;
+
+const names=["윗면","앞면","오른쪽 면","뒷면","왼쪽 면","아랫면"];
+const layers=[["bg","배경",0],["character","인물",.65],["frame","앞 프레임",1.3]];
+const faces=document.getElementById("faces");
+for(let i=0;i<6;i++){
+ const s=document.createElement("section");s.className="face";
+ s.innerHTML=`<h3>${i+1}. ${names[i]}</h3>`;
+ for(const [k,n,d] of layers){
+  s.innerHTML+=`<label>${n} 이미지</label><input id="f${i}-${k}" type="file" accept="image/*">
+  <label>깊이 <span id="v${i}-${k}">${d}</span></label>
+  <input id="d${i}-${k}" type="range" min="0" max="2.5" step=".01" value="${d}">`;
+ }
+ faces.appendChild(s);
+}
+for(let i=0;i<6;i++)for(const [k] of layers){
+ const r=document.getElementById(`d${i}-${k}`);
+ r.oninput=()=>document.getElementById(`v${i}-${k}`).textContent=Number(r.value).toFixed(2);
+}
+
+function makeMeta(){
+ const meta={v:6,dim:{w:+W.value,h:+H.value,d:+D.value},depth:{},files:{}};
+ for(let i=0;i<6;i++){
+  meta.depth[i]={};meta.files[i]={};
+  for(const [k] of layers)meta.depth[i][k]=+document.getElementById(`d${i}-${k}`).value;
+ }
+ return meta;
+}
+async function fileToDataURL(file){
+ return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})
+}
+preview.onclick=async()=>{
+ const meta=makeMeta();
+ for(let i=0;i<6;i++)for(const [k] of layers){
+  const f=document.getElementById(`f${i}-${k}`).files[0];
+  if(f)meta.files[i][k]=await fileToDataURL(f);
+ }
+ sessionStorage.setItem("sixFacePreview",JSON.stringify(meta));
+ previewFrame.src="viewer.html?preview=1";
+ previewBox.style.display="block";
+};
+window.closePreview=()=>{previewBox.style.display="none";previewFrame.src="about:blank"};
+
+function setProgress(n,text){
+ fill.style.width=n+"%";pct.textContent=Math.round(n)+"%";
+ if(text)msg.textContent=text;
+}
+function newId(){
+ const a=new Uint8Array(6);crypto.getRandomValues(a);
+ return [...a].map(x=>x.toString(36).padStart(2,"0")).join("").slice(0,9);
+}
+
+save.onclick=async()=>{
+ try{
+  if(!upload){
+    const mod=await import('https://esm.sh/@vercel/blob/client@2.0.0');
+    upload=mod.upload;
+  }
+  save.disabled=true;preview.disabled=true;progressWrap.style.display="block";
+  const id=newId(),meta=makeMeta();
+  const files=[];
+  for(let i=0;i<6;i++)for(const [k] of layers){
+   const f=document.getElementById(`f${i}-${k}`).files[0];
+   if(f)files.push({i,k,f});
+  }
+  const total=files.length+1;
+  let done=0;
+  setProgress(0,`저장 준비 중… ${files.length}개 이미지`);
+
+  for(const item of files){
+   const path=`works/${id}/face${item.i}_${item.k}_${item.f.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+   const blob=await upload(path,item.f,{
+     access:"public",
+     handleUploadUrl:"/api/upload",
+     multipart:item.f.size>4*1024*1024,
+     clientPayload:id,
+     onUploadProgress(p){
+       const base=done/total*100;
+       const part=(p.percentage||0)/total;
+       setProgress(base+part,`업로드 중… ${done+1}/${total} · ${Math.round(p.percentage||0)}%`);
+     }
+   });
+   meta.files[item.i][item.k]=blob.url;
+   done++;
+   setProgress(done/total*100,`업로드 완료 ${done}/${total}`);
+  }
+
+  const manifestBlob=new Blob([JSON.stringify(meta)],{type:"application/json"});
+  await upload(`works/${id}/manifest.json`,manifestBlob,{
+    access:"public",handleUploadUrl:"/api/upload",clientPayload:id,
+    onUploadProgress(p){setProgress(100,`작품 정보 저장 중… ${Math.round(p.percentage||0)}%`)}
+  });
+  setProgress(100,"저장 완료!");
+  const url=`${location.origin}/work/${id}`;
+  msg.innerHTML=`<b>저장 완료!</b><br><a href="${url}" target="_blank">${url}</a><br><button onclick="navigator.clipboard.writeText('${url}')">링크 복사</button>`;
+ }catch(e){
+  console.error(e);msg.textContent="저장 실패: "+(e?.message||e);
+ }finally{save.disabled=false;preview.disabled=false}
+};
+</script>
+</body></html>
