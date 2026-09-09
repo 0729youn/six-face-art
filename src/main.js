@@ -1,4 +1,4 @@
- import { upload } from "@vercel/blob/client";
+import { upload } from "@vercel/blob/client";
 
 const FACE_NAMES = [
   "윗면",
@@ -56,12 +56,15 @@ function createFaceUI() {
 
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = "image/jpeg,image/png,image/webp,image/gif";
+      input.accept =
+        "image/jpeg,image/png,image/webp,image/gif";
 
       input.addEventListener("change", () => {
-        files[i][layer.key] = input.files?.[0] || null;
+        const file = input.files?.[0] || null;
 
-        if (files[i][layer.key]) {
+        files[i][layer.key] = file;
+
+        if (file) {
           message(
             `${FACE_NAMES[i]}의 ${layer.label} 이미지를 선택했습니다.`
           );
@@ -99,7 +102,9 @@ function getDimensions() {
   const d = Number(document.getElementById("D").value);
 
   if (!(w > 0 && h > 0 && d > 0)) {
-    throw new Error("가로, 높이, 깊이를 올바르게 입력해주세요.");
+    throw new Error(
+      "가로, 높이, 깊이를 올바르게 입력해주세요."
+    );
   }
 
   return { w, h, d };
@@ -128,6 +133,11 @@ function collectPreviewFiles() {
   return result;
 }
 
+
+/* --------------------------------
+   관람객 시점 미리보기
+-------------------------------- */
+
 previewBtn.addEventListener("click", () => {
   try {
     const meta = buildMeta();
@@ -138,19 +148,17 @@ previewBtn.addEventListener("click", () => {
       return;
     }
 
-    const popup = window.open(
-      "/viewer.html?preview=1",
-      "_blank"
-    );
+    const url = "/viewer.html?preview=1";
+    const popup = window.open(url, "_blank");
 
     if (!popup) {
       message(
-        "미리보기 창이 차단되었습니다. 팝업을 허용한 후 다시 눌러주세요."
+        "미리보기 창이 차단되었습니다. 팝업 허용 후 다시 눌러주세요."
       );
       return;
     }
 
-    const sendPreview = () => {
+    const send = () => {
       popup.postMessage(
         {
           type: "sixFacePreview",
@@ -161,16 +169,23 @@ previewBtn.addEventListener("click", () => {
       );
     };
 
-    setTimeout(sendPreview, 1000);
+    setTimeout(send, 500);
 
     message("관람객 시점 미리보기를 여는 중입니다.");
   } catch (error) {
     console.error(error);
+
     message(
-      error.message || "미리보기를 열지 못했습니다."
+      error.message ||
+      "미리보기를 열지 못했습니다."
     );
   }
 });
+
+
+/* --------------------------------
+   작품 번호 생성
+-------------------------------- */
 
 function makeId() {
   const chars =
@@ -185,15 +200,19 @@ function makeId() {
   return id;
 }
 
+
+/* --------------------------------
+   Vercel Blob 업로드
+-------------------------------- */
+
 async function uploadBlob(file, pathname, onProgress) {
   const result = await upload(pathname, file, {
     access: "public",
     handleUploadUrl: "/api/upload",
-    clientPayload: JSON.stringify({
-      pathname
-    }),
+
     multipart: true,
-    onUploadProgress: event => {
+
+    onUploadProgress(event) {
       if (event.percentage != null) {
         onProgress?.(event.percentage);
       }
@@ -203,13 +222,16 @@ async function uploadBlob(file, pathname, onProgress) {
   return result.url;
 }
 
+
+/* --------------------------------
+   작품 저장
+-------------------------------- */
+
 async function saveWork() {
   const id = makeId();
 
-  const uploaded = Array.from(
-    { length: 6 },
-    () => ({})
-  );
+  const uploaded =
+    Array.from({ length: 6 }, () => ({}));
 
   const imageEntries = [];
 
@@ -235,8 +257,16 @@ async function saveWork() {
   fillEl.style.width = "0%";
   pctEl.textContent = "0%";
 
-  for (let n = 0; n < imageEntries.length; n++) {
-    const { i, key, file } = imageEntries[n];
+  for (
+    let n = 0;
+    n < imageEntries.length;
+    n++
+  ) {
+    const {
+      i,
+      key,
+      file
+    } = imageEntries[n];
 
     const safeName =
       file.name.replace(
@@ -255,7 +285,9 @@ async function saveWork() {
           (n / imageEntries.length) * 90;
 
         const current =
-          (percentage / imageEntries.length) * 0.9;
+          percentage /
+          imageEntries.length *
+          0.9;
 
         const total =
           Math.round(base + current);
@@ -266,27 +298,60 @@ async function saveWork() {
     );
 
     uploaded[i][key] = url;
+
+    const percent = Math.round(
+      ((n + 1) /
+        imageEntries.length) *
+      90
+    );
+
+    fillEl.style.width =
+      `${percent}%`;
+
+    pctEl.textContent =
+      `${percent}%`;
   }
+
+
+  /* ------------------------------
+     manifest.json 생성
+  ------------------------------ */
 
   const manifest = {
     id,
     dim: getDimensions(),
-    depth: depths.map(face => ({ ...face })),
+    depth: depths.map(face => ({
+      ...face
+    })),
     files: uploaded
   };
 
-  const manifestFile = new File(
-    [JSON.stringify(manifest)],
-    "manifest.json",
-    {
-      type: "application/json"
-    }
-  );
+  const manifestBlob =
+    new Blob(
+      [JSON.stringify(manifest)],
+      {
+        type: "application/json"
+      }
+    );
+
+  const manifestFile =
+    new File(
+      [manifestBlob],
+      "manifest.json",
+      {
+        type: "application/json"
+      }
+    );
 
   await uploadBlob(
     manifestFile,
     `works/${id}/manifest.json`
   );
+
+
+  /* ------------------------------
+     완료
+  ------------------------------ */
 
   fillEl.style.width = "100%";
   pctEl.textContent = "100%";
@@ -295,45 +360,70 @@ async function saveWork() {
     `${location.origin}/work/${encodeURIComponent(id)}`;
 
   msgEl.innerHTML =
-    `저장 완료!<br><a href="${shareUrl}" target="_blank">${shareUrl}</a>`;
+    `저장 완료!<br>` +
+    `<a href="${shareUrl}" target="_blank">${shareUrl}</a>`;
 
   return shareUrl;
 }
 
-saveBtn.addEventListener("click", async () => {
-  try {
-    saveBtn.disabled = true;
-    previewBtn.disabled = true;
 
-    message(
-      "작품을 온라인 저장소에 업로드하는 중입니다."
-    );
+/* --------------------------------
+   저장 버튼
+-------------------------------- */
 
-    await saveWork();
-  } catch (error) {
-    console.error(error);
+saveBtn.addEventListener(
+  "click",
+  async () => {
+    try {
+      saveBtn.disabled = true;
+      previewBtn.disabled = true;
 
-    progressWrap.style.display = "none";
+      message(
+        "작품을 온라인 저장소에 업로드하는 중입니다."
+      );
 
-    message(
-      `저장 실패: ${
-        error.message || "알 수 없는 오류"
-      }`
-    );
-  } finally {
-    saveBtn.disabled = false;
-    previewBtn.disabled = false;
+      await saveWork();
+
+    } catch (error) {
+      console.error(error);
+
+      progressWrap.style.display =
+        "none";
+
+      message(
+        `저장 실패: ${
+          error.message ||
+          "알 수 없는 오류"
+        }`
+      );
+
+    } finally {
+      saveBtn.disabled = false;
+      previewBtn.disabled = false;
+    }
   }
-});
+);
+
+
+/* --------------------------------
+   미리보기 닫기
+-------------------------------- */
 
 window.closePreview = function () {
   const box =
-    document.getElementById("previewBox");
+    document.getElementById(
+      "previewBox"
+    );
 
   if (box) {
     box.style.display = "none";
   }
 };
+
+
+/* --------------------------------
+   초기화
+-------------------------------- */
 
 createFaceUI();
 
